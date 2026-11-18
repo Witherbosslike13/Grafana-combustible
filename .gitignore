@@ -1,0 +1,6 @@
+.env
+data/
+collector.log
+mosquitto/log/
+__pycache__/
+*.pyc

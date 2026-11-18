@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: campdata-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: campdata
+      POSTGRES_USER: campdata
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - campdata
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: campdata-grafana
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+    networks:
+      - campdata
+
+  collector:
+    build: ./collector
+    container_name: campdata-collector
+    restart: "no"
+    depends_on:
+      - postgres
+      - mosquitto
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      DB_HOST: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+    networks:
+      - campdata
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: campdata-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    networks:
+      - campdata
+
+  influxdb:
+    image: influxdb:2
+    container_name: campdata-influxdb
+    restart: unless-stopped
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_USERNAME}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN}
+    volumes:
+      - ./data/influxdb:/var/lib/influxdb2
+    networks:
+      - campdata
+
+  telegraf:
+    image: telegraf:latest
+    container_name: campdata-telegraf
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+      - influxdb
+    environment:
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      INFLUX_ORG: ${INFLUX_ORG}
+      INFLUX_BUCKET: ${INFLUX_BUCKET}
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    networks:
+      - campdata
+networks:
+
+  campdata:
